@@ -12,14 +12,15 @@ Use this skill to turn a user request into an image-generation API call through 
 1. Confirm the image intent, final prompt, aspect/size, style, and output folder from the conversation. Ask one concise question only when a missing detail would materially change the result.
 2. Locate configuration in this order: `--config`, `IMAGEBRIDGE_CONFIG`, `./.imagebridge/config.json`, then `~/.imagebridge/config.json`.
 3. If no configuration exists, help the user create one from `references/configuration.md` or by running `python3 <skill-dir>/scripts/image_bridge.py --print-config-template`. Store secrets in environment variables, not in committed files.
-4. Generate the image by running:
+4. Treat `endpoint` as either a full image generation endpoint or an OpenAI-compatible base URL. Base URLs like `https://host` or `https://host/v1` normalize to `/v1/images/generations`.
+5. Generate the image by running:
 
    ```bash
    python3 <skill-dir>/scripts/image_bridge.py --prompt "<final prompt>" --size "<size>" --output-dir "<output-dir>"
    ```
 
    In Claude Code, `<skill-dir>` can be `${CLAUDE_SKILL_DIR}`. In Codex, use the directory that contains this `SKILL.md`.
-5. Report the saved image path and metadata path. If the provider returns unsupported size/model errors, adjust only provider-specific parameters that are clearly supported by the configuration or ask for the desired fallback.
+6. Report the saved image path and metadata path. If the provider returns unsupported size/model errors, adjust only provider-specific parameters that are clearly supported by the configuration or ask for the desired fallback.
 
 ## Prompt Handling
 

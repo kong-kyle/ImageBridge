@@ -24,17 +24,19 @@ curl -fsSL https://raw.githubusercontent.com/kong-kyle/ImageBridge/main/install.
 curl -fsSL https://raw.githubusercontent.com/kong-kyle/ImageBridge/main/install.sh | bash -s -- claude
 ```
 
-安装时会提示输入生图接口 URL、API Key 和模型名，并自动生成 `~/.imagebridge/config.json` 与 `~/.imagebridge/.env`。
+安装时会提示输入生图接口 Base URL、API Key 和模型名，并自动生成 `~/.imagebridge/config.json` 与 `~/.imagebridge/.env`。
 
 ## 2. 配置 url、key 和 model
 
 按安装器提示填写：
 
 ```text
-Image API URL: https://api.example.com/v1/images/generations
+Image API URL: https://api.example.com
 Image API Key: sk-...
 Image model: provider-image-model
 ```
+
+输入 `https://api.example.com` 或 `https://api.example.com/v1` 时，ImageBridge 会自动使用 `/v1/images/generations`。
 
 安装器会自动写入配置，通常可以直接使用。需要在 shell 里手动运行脚本时，可以执行：
 
@@ -45,11 +47,23 @@ source ~/.imagebridge/.env
 也可以无交互安装：
 
 ```bash
-IMAGEBRIDGE_URL="https://api.example.com/v1/images/generations" \
+IMAGEBRIDGE_URL="https://api.example.com" \
 IMAGEBRIDGE_API_KEY="sk-..." \
 IMAGEBRIDGE_MODEL="provider-image-model" \
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/kong-kyle/ImageBridge/main/install.sh)"
 ```
+
+默认不校验 TLS 证书，兼容内网代理、自签名证书和部分第三方网关。如果你需要严格校验证书，加上 `IMAGEBRIDGE_TLS_VERIFY=true`：
+
+```bash
+IMAGEBRIDGE_URL="https://api.example.com" \
+IMAGEBRIDGE_API_KEY="sk-..." \
+IMAGEBRIDGE_MODEL="provider-image-model" \
+IMAGEBRIDGE_TLS_VERIFY=true \
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/kong-kyle/ImageBridge/main/install.sh)"
+```
+
+公网生产环境建议开启证书校验。
 
 ## 3. 使用
 

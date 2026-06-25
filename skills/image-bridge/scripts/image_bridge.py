@@ -13,10 +13,12 @@ import os
 from pathlib import Path
 import re
 import shlex
+import ssl
 import sys
 import time
 from typing import Any
 from urllib import error, request
+from urllib.parse import urlparse, urlunparse
 
 
 DEFAULT_CONFIG_PATHS = (
@@ -47,6 +49,7 @@ CONFIG_TEMPLATE: dict[str, Any] = {
             "headers": {
                 "Content-Type": "application/json"
             },
+            "tls_verify": False,
             "response": {
                 "data_path": "data",
                 "base64_path": "b64_json",
@@ -177,6 +180,23 @@ def find_config(explicit_path: str | None) -> tuple[dict[str, Any], Path | None]
     )
 
 
+def normalize_endpoint(endpoint: str) -> str:
+    parsed = urlparse(endpoint)
+    if not parsed.scheme:
+        endpoint = "https://" + endpoint
+        parsed = urlparse(endpoint)
+
+    path = parsed.path.rstrip("/")
+    if path in ("", "/"):
+        path = "/v1/images/generations"
+    elif path == "/v1":
+        path = "/v1/images/generations"
+    elif path.endswith("/v1"):
+        path = path + "/images/generations"
+
+    return urlunparse((parsed.scheme, parsed.netloc, path, "", "", ""))
+
+
 def active_provider(config: dict[str, Any], provider_name: str | None) -> tuple[str, dict[str, Any]]:
     providers = config.get("providers")
     if isinstance(providers, dict):
@@ -220,6 +240,29 @@ def parse_value(raw: str) -> Any:
         return raw
 
 
+def as_bool(value: Any, default: bool = True) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in ("1", "true", "yes", "y", "on"):
+            return True
+        if lowered in ("0", "false", "no", "n", "off"):
+            return False
+    return default
+
+
+def tls_verify(provider: dict[str, Any]) -> bool:
+    env_value = os.environ.get("IMAGEBRIDGE_TLS_VERIFY")
+    if env_value is not None:
+        return as_bool(env_value, False)
+    return as_bool(provider.get("tls_verify"), False)
+
+
 def apply_params(payload: dict[str, Any], params: list[str]) -> None:
     for item in params:
         if "=" not in item:
@@ -260,6 +303,7 @@ def build_headers(provider: dict[str, Any]) -> dict[str, str]:
 
     result = {str(key): str(value) for key, value in expand_env(headers).items()}
     result.setdefault("Content-Type", "application/json")
+    result.setdefault("User-Agent", "ImageBridge/1.0")
 
     api_key = provider.get("api_key")
     api_key_env = provider.get("api_key_env")
@@ -287,11 +331,18 @@ def json_path(value: Any, path: str | None) -> Any:
     return current
 
 
-def request_json(endpoint: str, method: str, headers: dict[str, str], payload: dict[str, Any], timeout: int) -> Any:
+def request_json(
+    endpoint: str,
+    method: str,
+    headers: dict[str, str],
+    payload: dict[str, Any],
+    timeout: int,
+    verify_tls: bool,
+) -> Any:
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     req = request.Request(endpoint, data=body, headers=headers, method=method.upper())
     try:
-        with request.urlopen(req, timeout=timeout) as response:
+        with request.urlopen(req, timeout=timeout, context=ssl_context(verify_tls)) as response:
             raw = response.read()
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
@@ -305,6 +356,23 @@ def request_json(endpoint: str, method: str, headers: dict[str, str], payload: d
         raise ImageBridgeError("Provider response was not valid JSON") from exc
 
 
+def ssl_context(verify_tls: bool = True) -> ssl.SSLContext:
+    if not verify_tls:
+        return ssl._create_unverified_context()
+
+    cafile = os.environ.get("IMAGEBRIDGE_CA_FILE")
+    candidates = [cafile] if cafile else []
+    candidates.extend([
+        "/etc/ssl/cert.pem",
+        "/opt/homebrew/etc/ca-certificates/cert.pem",
+        "/usr/local/etc/openssl@3/cert.pem",
+    ])
+    for candidate in candidates:
+        if candidate and Path(candidate).exists():
+            return ssl.create_default_context(cafile=candidate)
+    return ssl.create_default_context()
+
+
 def infer_extension(content_type: str | None, fallback: str) -> str:
     if content_type:
         guessed = mimetypes.guess_extension(content_type.split(";")[0].strip())
@@ -313,9 +381,9 @@ def infer_extension(content_type: str | None, fallback: str) -> str:
     return fallback.lstrip(".")
 
 
-def download_url(url: str, timeout: int) -> tuple[bytes, str | None]:
+def download_url(url: str, timeout: int, verify_tls: bool = True) -> tuple[bytes, str | None]:
     try:
-        with request.urlopen(url, timeout=timeout) as response:
+        with request.urlopen(url, timeout=timeout, context=ssl_context(verify_tls)) as response:
             return response.read(), response.headers.get("Content-Type")
     except error.URLError as exc:
         raise ImageBridgeError(f"Image download failed: {exc.reason}") from exc
@@ -328,7 +396,12 @@ def decode_data_url(value: str) -> tuple[bytes, str]:
     return base64.b64decode(encoded), extension
 
 
-def extract_images(response_json: Any, provider: dict[str, Any], timeout: int) -> list[tuple[bytes, str, dict[str, Any]]]:
+def extract_images(
+    response_json: Any,
+    provider: dict[str, Any],
+    timeout: int,
+    verify_tls: bool = True,
+) -> list[tuple[bytes, str, dict[str, Any]]]:
     response_cfg = provider.get("response") or {}
     if not isinstance(response_cfg, dict):
         raise ImageBridgeError("response must be an object")
@@ -366,7 +439,7 @@ def extract_images(response_json: Any, provider: dict[str, Any], timeout: int) -
             except ImageBridgeError:
                 url = None
             if isinstance(url, str) and url:
-                data, content_type = download_url(url, timeout)
+                data, content_type = download_url(url, timeout, verify_tls)
                 images.append((data, infer_extension(content_type, default_ext), record))
 
     if not images:
@@ -450,9 +523,11 @@ def main(argv: list[str]) -> int:
     endpoint = provider.get("endpoint")
     if not endpoint:
         raise ImageBridgeError("Provider endpoint is required")
+    endpoint = normalize_endpoint(str(endpoint))
 
     method = str(provider.get("method", "POST"))
     timeout = int(provider.get("timeout_seconds", 120))
+    verify_tls = tls_verify(provider)
     payload = build_payload(provider, args)
     headers = build_headers(provider)
 
@@ -464,6 +539,7 @@ def main(argv: list[str]) -> int:
         "headers": headers,
         "payload": payload,
         "output_dir": str(output_dir(provider, args)),
+        "tls_verify": verify_tls,
     }
 
     if args.dry_run:
@@ -471,8 +547,8 @@ def main(argv: list[str]) -> int:
         return 0
 
     started = time.time()
-    response_json = request_json(str(endpoint), method, headers, payload, timeout)
-    images = extract_images(response_json, provider, timeout)
+    response_json = request_json(str(endpoint), method, headers, payload, timeout, verify_tls)
+    images = extract_images(response_json, provider, timeout, verify_tls)
     metadata = save_outputs(images, output_dir(provider, args), args.prompt, provider_name, payload, response_json)
     metadata["elapsed_seconds"] = round(time.time() - started, 3)
     print(json.dumps(sanitize(metadata), ensure_ascii=False, indent=2))

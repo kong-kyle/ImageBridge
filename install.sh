@@ -28,19 +28,22 @@ prompt() {
   local secret="${3:-false}"
   local value=""
 
-  if [ -r /dev/tty ]; then
-    if [ "$secret" = "true" ]; then
-      printf "%s" "$label" > /dev/tty
-      IFS= read -r -s value < /dev/tty || true
-      printf "\n" > /dev/tty
+  if ! tty -s; then
+    printf "%s" "$default_value"
+    return 0
+  fi
+
+  if [ "$secret" = "true" ]; then
+    printf "%s" "$label" > /dev/tty
+    IFS= read -r -s value < /dev/tty || true
+    printf "\n" > /dev/tty
+  else
+    if [ -n "$default_value" ]; then
+      printf "%s [%s]: " "$label" "$default_value" > /dev/tty
     else
-      if [ -n "$default_value" ]; then
-        printf "%s [%s]: " "$label" "$default_value" > /dev/tty
-      else
-        printf "%s: " "$label" > /dev/tty
-      fi
-      IFS= read -r value < /dev/tty || true
+      printf "%s: " "$label" > /dev/tty
     fi
+    IFS= read -r value < /dev/tty || true
   fi
 
   if [ -z "$value" ]; then
@@ -57,6 +60,44 @@ shell_escape() {
   python3 -c 'import shlex, sys; print(shlex.quote(sys.stdin.read()))'
 }
 
+bool_json() {
+  python3 -c '
+import sys
+value = sys.stdin.read().strip().lower()
+if value in ("0", "false", "no", "n", "off"):
+    print("false")
+else:
+    print("true")
+'
+}
+
+normalize_endpoint() {
+  python3 -c '
+import sys
+from urllib.parse import urlparse, urlunparse
+
+raw = sys.stdin.read().strip()
+if not raw:
+    print("")
+    raise SystemExit
+
+parsed = urlparse(raw)
+if not parsed.scheme:
+    raw = "https://" + raw
+    parsed = urlparse(raw)
+
+path = parsed.path.rstrip("/")
+if path in ("", "/"):
+    path = "/v1/images/generations"
+elif path == "/v1":
+    path = "/v1/images/generations"
+elif path.endswith("/v1"):
+    path = path + "/images/generations"
+
+print(urlunparse((parsed.scheme, parsed.netloc, path, "", "", "")))
+'
+}
+
 write_config() {
   local endpoint="$1"
   local api_key="$2"
@@ -65,8 +106,10 @@ write_config() {
   mkdir -p "$CONFIG_DIR"
   chmod 700 "$CONFIG_DIR"
 
+  endpoint="$(printf "%s" "$endpoint" | normalize_endpoint)"
   endpoint_json="$(printf "%s" "$endpoint" | json_escape)"
   model_json="$(printf "%s" "$model" | json_escape)"
+  tls_verify_json="$(printf "%s" "${IMAGEBRIDGE_TLS_VERIFY:-false}" | bool_json)"
   cat > "$CONFIG_FILE" <<EOF
 {
   "active": "default",
@@ -86,6 +129,7 @@ write_config() {
       "payload_defaults": {
         "response_format": "b64_json"
       },
+      "tls_verify": $tls_verify_json,
       "response": {
         "data_path": "data",
         "base64_path": "b64_json",
@@ -102,6 +146,7 @@ EOF
   cat > "$ENV_FILE" <<EOF
 export IMAGEBRIDGE_API_KEY=$api_key_shell
 export IMAGEBRIDGE_CONFIG="$CONFIG_FILE"
+export IMAGEBRIDGE_TLS_VERIFY="$tls_verify_json"
 EOF
   chmod 600 "$ENV_FILE"
 }
@@ -135,6 +180,7 @@ echo "Configure ImageBridge"
 endpoint="${IMAGEBRIDGE_URL:-}"
 api_key="${IMAGEBRIDGE_API_KEY:-}"
 model="${IMAGEBRIDGE_MODEL:-}"
+tls_verify="${IMAGEBRIDGE_TLS_VERIFY:-false}"
 
 if [ -z "$endpoint" ]; then
   endpoint="$(prompt "Image API URL" "")"
@@ -145,6 +191,9 @@ fi
 if [ -z "$model" ]; then
   model="$(prompt "Image model" "")"
 fi
+if [ -z "${IMAGEBRIDGE_TLS_VERIFY:-}" ]; then
+  tls_verify="$(prompt "Verify TLS certificates" "false")"
+fi
 
 if [ -z "$endpoint" ] || [ -z "$api_key" ] || [ -z "$model" ]; then
   echo "Skipped config: url, key, and model are required." >&2
@@ -152,6 +201,7 @@ if [ -z "$endpoint" ] || [ -z "$api_key" ] || [ -z "$model" ]; then
   exit 2
 fi
 
+export IMAGEBRIDGE_TLS_VERIFY="$tls_verify"
 write_config "$endpoint" "$api_key" "$model"
 
 echo "Config written: $CONFIG_FILE"

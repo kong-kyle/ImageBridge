@@ -36,6 +36,7 @@ python3 <skill-dir>/scripts/image_bridge.py --print-config-template > ~/.imagebr
       "headers": {
         "Content-Type": "application/json"
       },
+      "tls_verify": false,
       "response": {
         "data_path": "data",
         "base64_path": "b64_json",
@@ -51,9 +52,10 @@ python3 <skill-dir>/scripts/image_bridge.py --print-config-template > ~/.imagebr
 
 - `active`: default provider profile under `providers`.
 - `output_dir`: default folder for generated images and metadata.
-- `endpoint`: full HTTP endpoint for the provider's image generation API.
+- `endpoint`: provider URL. You can use a base URL such as `https://api.example.com` or `https://api.example.com/v1`; ImageBridge normalizes it to `/v1/images/generations`. If your provider uses a custom path, provide the full image generation endpoint.
 - `api_key_env`: environment variable that stores the API key. The script adds `Authorization: Bearer <key>` when `headers.Authorization` is not already set.
 - `headers`: extra request headers. Values can include `${ENV_NAME}` placeholders.
+- `tls_verify`: whether to verify HTTPS certificates. Defaults to `false` for broad third-party gateway compatibility. Set to `true` for strict production TLS verification. `IMAGEBRIDGE_TLS_VERIFY=true` overrides config.
 - `payload_defaults`: provider-specific JSON values sent on every request.
 - `field_map`: maps common CLI concepts to provider payload fields. Use nested dotted paths such as `input.prompt` if the provider requires nested JSON.
 - `response`: tells the script how to find image data in the JSON response. OpenAI-compatible APIs usually return `data[].b64_json` or `data[].url`.
