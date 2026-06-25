@@ -33,8 +33,10 @@ curl -fsSL https://raw.githubusercontent.com/kong-kyle/ImageBridge/main/install.
 
 | 工具 | 路径 | 调用方式 |
 | --- | --- | --- |
-| Codex | `~/.agents/skills/image-bridge/SKILL.md` 和 `${CODEX_HOME:-~/.codex}/skills/image-bridge/SKILL.md` | `$image-bridge` 或 `/skills` |
+| Codex | `${CODEX_HOME:-~/.codex}/skills/image-bridge/SKILL.md` | `$image-bridge` 或 `/skills` |
 | Claude Code | `~/.claude/skills/image-bridge/SKILL.md` | `/image-bridge` |
+
+如果本机曾经安装过旧版 `~/.agents/skills/image-bridge`，安装器会自动删除这个旧副本，避免 Codex 技能列表出现两个 ImageBridge。
 
 Codex 安装后请重启 Codex，让新 skill 被重新扫描。
 

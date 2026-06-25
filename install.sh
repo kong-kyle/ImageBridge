@@ -171,9 +171,10 @@ install_codex_skill() {
   local agents_root="$HOME/.agents/skills"
   local codex_root="${CODEX_HOME:-$HOME/.codex}/skills"
 
-  install_skill "$agents_root"
-  if [ "$codex_root" != "$agents_root" ]; then
-    install_skill "$codex_root"
+  install_skill "$codex_root"
+  if [ "$agents_root" != "$codex_root" ] && [ -d "$agents_root/image-bridge" ]; then
+    rm -rf "$agents_root/image-bridge"
+    echo "Removed legacy duplicate: $agents_root/image-bridge"
   fi
 }
 
