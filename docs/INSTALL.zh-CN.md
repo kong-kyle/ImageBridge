@@ -33,8 +33,10 @@ curl -fsSL https://raw.githubusercontent.com/kong-kyle/ImageBridge/main/install.
 
 | 工具 | 路径 | 调用方式 |
 | --- | --- | --- |
-| Codex | `~/.agents/skills/image-bridge/SKILL.md` | `$image-bridge` 或 `/skills` |
+| Codex | `~/.agents/skills/image-bridge/SKILL.md` 和 `${CODEX_HOME:-~/.codex}/skills/image-bridge/SKILL.md` | `$image-bridge` 或 `/skills` |
 | Claude Code | `~/.claude/skills/image-bridge/SKILL.md` | `/image-bridge` |
+
+Codex 安装后请重启 Codex，让新 skill 被重新扫描。
 
 ## 2. 配置 url、key 和 model
 
@@ -162,7 +164,7 @@ Use $image-bridge to generate a 4K poster for a new AI image product.
 直接测试脚本：
 
 ```bash
-python3 ~/.agents/skills/image-bridge/scripts/image_bridge.py \
+python3 "${CODEX_HOME:-$HOME/.codex}/skills/image-bridge/scripts/image_bridge.py" \
   --prompt "赛博朋克城市夜景海报，电影级灯光" \
   --size 1024x1792 \
   --dry-run
@@ -171,7 +173,7 @@ python3 ~/.agents/skills/image-bridge/scripts/image_bridge.py \
 真实生成：
 
 ```bash
-python3 ~/.agents/skills/image-bridge/scripts/image_bridge.py \
+python3 "${CODEX_HOME:-$HOME/.codex}/skills/image-bridge/scripts/image_bridge.py" \
   --prompt "4K 科技发布会主视觉海报，蓝白配色，未来感" \
   --size 1024x1792 \
   --output-dir imagebridge-output

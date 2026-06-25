@@ -28,13 +28,13 @@ prompt() {
   local secret="${3:-false}"
   local value=""
 
-  if ! tty -s; then
+  if ! { : < /dev/tty > /dev/tty; } 2>/dev/null; then
     printf "%s" "$default_value"
     return 0
   fi
 
   if [ "$secret" = "true" ]; then
-    printf "%s" "$label" > /dev/tty
+    printf "%s: " "$label" > /dev/tty
     IFS= read -r -s value < /dev/tty || true
     printf "\n" > /dev/tty
   else
@@ -167,8 +167,18 @@ install_skill() {
   echo "Installed: $dest_root/image-bridge"
 }
 
+install_codex_skill() {
+  local agents_root="$HOME/.agents/skills"
+  local codex_root="${CODEX_HOME:-$HOME/.codex}/skills"
+
+  install_skill "$agents_root"
+  if [ "$codex_root" != "$agents_root" ]; then
+    install_skill "$codex_root"
+  fi
+}
+
 if [ "$TARGET" = "codex" ] || [ "$TARGET" = "both" ]; then
-  install_skill "$HOME/.agents/skills"
+  install_codex_skill
 fi
 
 if [ "$TARGET" = "claude" ] || [ "$TARGET" = "both" ]; then

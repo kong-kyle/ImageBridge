@@ -26,6 +26,8 @@ curl -fsSL https://raw.githubusercontent.com/kong-kyle/ImageBridge/main/install.
 
 安装时会提示输入生图接口 Base URL、API Key 和模型名，并自动生成 `~/.imagebridge/config.json` 与 `~/.imagebridge/.env`。
 
+Codex 会同时安装到 `~/.agents/skills/image-bridge` 和 `${CODEX_HOME:-~/.codex}/skills/image-bridge`，兼容不同版本的 Codex 技能发现路径。安装后重启 Codex 让新 skill 生效。
+
 ## 2. 配置 url、key 和 model
 
 按安装器提示填写：
