@@ -1,0 +1,4 @@
+interface:
+  display_name: "ImageBridge"
+  short_description: "Configurable third-party image generation bridge"
+  default_prompt: "Use $image-bridge to generate a poster image from this prompt."
